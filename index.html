@@ -12,15 +12,20 @@
       background-color: #f4f4f4;
       color: #333;
       transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
     }
     .container {
-      max-width: 800px;
+      max-width: 90%;
       margin: 20px auto;
       padding: 20px;
       background: white;
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       transition: all 0.3s ease;
+      position: relative; /* 添加相对定位 */
+      z-index: 1; /* 确保内容在背景之上 */
     }
     h1, h2 {
       text-align: center;
@@ -56,8 +61,16 @@
       padding: 10px;
       border-bottom: 1px solid #eee;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      position: relative; /* 添加相对定位 */
+    }
+    .note-checkbox-container {
+      margin-right: 10px;
+      width: 30px; /* 固定宽度 */
+    }
+    .note-content {
+      text-align: right; /* 确保笔记内容右对齐 */
+      flex-grow: 1; /* 确保内容占据剩余空间 */
     }
     .note-actions button {
       margin-left: 10px;
@@ -72,7 +85,7 @@
     }
     .gallery {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
       gap: 10px;
     }
     .gallery-item {
@@ -82,10 +95,11 @@
       overflow: hidden;
       border-radius: 8px;
     }
-    .gallery-item img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+    .gallery-item-checkbox {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      z-index: 10;
     }
     .gallery-item button {
       position: absolute;
@@ -97,11 +111,55 @@
       border-radius: 4px;
       cursor: pointer;
     }
+    .reset-button {
+      display: block;
+      margin: 20px auto;
+    }
+    .highlight {
+      background-color: gold;
+      padding: 2px;
+      border-radius: 4px;
+    }
+    .card-background {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-size: cover;
+      background-position: center;
+      border-radius: 8px;
+      opacity: 1; /* 默认不透明度 */
+      pointer-events: none; /* 不影响点击事件 */
+      z-index: -1; /* 放在内容后面 */
+    }
+    @media (max-width: 768px) {
+      .container {
+        margin: 10px auto;
+        padding: 15px;
+      }
+      .section {
+        margin-bottom: 15px;
+      }
+      .note-item {
+        flex-direction: column;
+        align-items: start;
+      }
+      .note-checkbox-container {
+        margin-bottom: 10px;
+      }
+      .note-actions {
+        margin-top: 10px;
+      }
+      .gallery {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>📚 知识库笔记</h1>
+    <h1 id="main-title">📚 知识库笔记</h1>
 
     <!-- 自定义主题 -->
     <div class="section">
@@ -110,9 +168,9 @@
       <input type="color" id="page-bg-color" value="#ffffff">
       <button onclick="applyBackgroundColor()">应用背景颜色</button>
 
-      <label for="text-color">页面文字颜色：</label>
-      <input type="color" id="text-color" value="#000000">
-      <button onclick="applyTextColor()">应用文字颜色</button>
+      <label for="title-text-color">标题文字颜色：</label>
+      <input type="color" id="title-text-color" value="#555">
+      <button onclick="applyTitleTextColor()">应用标题文字颜色</button>
 
       <label for="card-bg-color">卡片背景颜色：</label>
       <input type="color" id="card-bg-color" value="#ffffff">
@@ -130,6 +188,12 @@
         <option value="Verdana">Verdana</option>
       </select>
       <button onclick="applyFont()">应用字体</button>
+
+      <label for="background-image-opacity">背景图片透明度（1-100%）：</label>
+      <input type="range" id="background-image-opacity" min="1" max="100" value="100">
+      <button onclick="applyBackgroundImageOpacity()">应用透明度</button>
+
+      <button class="reset-button" onclick="resetCustomStyles()">重置自定义样式</button>
     </div>
 
     <!-- 自定义背景图片 -->
@@ -160,6 +224,7 @@
     <!-- 我的笔记 -->
     <div class="section">
       <h2>📜 我的笔记</h2>
+      <button onclick="deleteSelectedNotes()">批量删除选中笔记</button>
       <ul id="note-list" class="note-list"></ul>
     </div>
 
@@ -167,6 +232,8 @@
     <div class="section">
       <h2>🖼️ 图片上传</h2>
       <input type="file" id="image-upload" accept="image/*" multiple>
+      <button onclick="uploadImages()">上传图片</button>
+      <button onclick="deleteSelectedImages()">删除选中图片</button>
       <div class="gallery" id="gallery"></div>
     </div>
 
@@ -233,11 +300,12 @@
     function saveSettings() {
       const settings = {
         pageBackgroundColor: document.getElementById('page-bg-color').value,
-        textColor: document.getElementById('text-color').value,
+        titleTextColor: document.getElementById('title-text-color').value,
         cardBackgroundColor: document.getElementById('card-bg-color').value,
         cardTextColor: document.getElementById('card-text-color').value,
         font: document.getElementById('font-select').value,
-        backgroundImage: document.body.style.backgroundImage || ''
+        backgroundImage: document.querySelector('.card-background').style.backgroundImage || '',
+        backgroundImageOpacity: document.getElementById('background-image-opacity').value
       };
       localStorage.setItem('settings', JSON.stringify(settings));
     }
@@ -245,19 +313,19 @@
     // 应用保存的自定义设置
     function applySavedSettings(settings) {
       document.body.style.backgroundColor = settings.pageBackgroundColor;
-      document.body.style.color = settings.textColor;
+      document.getElementById('main-title').style.color = settings.titleTextColor;
       document.querySelector('.container').style.backgroundColor = settings.cardBackgroundColor;
       document.querySelector('.container').style.color = settings.cardTextColor;
       document.body.style.fontFamily = settings.font;
       if (settings.backgroundImage) {
-        document.body.style.backgroundImage = settings.backgroundImage;
-        document.body.style.backgroundSize = 'cover';
-        document.body.style.backgroundPosition = 'center';
+        document.querySelector('.container').innerHTML += `<div class="card-background" style="background-image: ${settings.backgroundImage};"></div>`;
       }
+      document.getElementById('background-image-opacity').value = settings.backgroundImageOpacity;
+      applyBackgroundImageOpacity();
 
       // 恢复输入框和下拉菜单的值
       document.getElementById('page-bg-color').value = settings.pageBackgroundColor;
-      document.getElementById('text-color').value = settings.textColor;
+      document.getElementById('title-text-color').value = settings.titleTextColor;
       document.getElementById('card-bg-color').value = settings.cardBackgroundColor;
       document.getElementById('card-text-color').value = settings.cardTextColor;
       document.getElementById('font-select').value = settings.font;
@@ -270,10 +338,10 @@
       saveSettings(); // 保存设置
     }
 
-    // 应用页面文字颜色
-    function applyTextColor() {
-      const color = document.getElementById('text-color').value;
-      document.body.style.color = color;
+    // 应用标题文字颜色
+    function applyTitleTextColor() {
+      const color = document.getElementById('title-text-color').value;
+      document.getElementById('main-title').style.color = color;
       saveSettings(); // 保存设置
     }
 
@@ -305,13 +373,20 @@
         const file = fileInput.files[0];
         const reader = new FileReader();
         reader.onload = function(e) {
-          document.body.style.backgroundImage = `url(${e.target.result})`;
-          document.body.style.backgroundSize = 'cover';
-          document.body.style.backgroundPosition = 'center';
+          const imageUrl = e.target.result;
+          document.querySelector('.card-background')?.remove(); // 移除旧的背景图片
+          document.querySelector('.container').innerHTML += `<div class="card-background" style="background-image: url(${imageUrl});"></div>`;
           saveSettings(); // 保存设置
         };
         reader.readAsDataURL(file);
       }
+    }
+
+    // 应用背景图片透明度
+    function applyBackgroundImageOpacity() {
+      const opacity = document.getElementById('background-image-opacity').value;
+      document.querySelector('.card-background').style.opacity = `${opacity / 100}`;
+      saveSettings(); // 保存设置
     }
 
     // 保存笔记
@@ -339,7 +414,10 @@
         li.className = 'note-item';
         li.id = `note-${index}`;
         li.innerHTML = `
-          <div>
+          <div class="note-checkbox-container">
+            <input type="checkbox" class="note-checkbox" id="note-check-${index}">
+          </div>
+          <div class="note-content">
             <strong>${note.type}</strong>: ${note.content} 
             <small>(${note.timestamp})</small>
           </div>
@@ -376,75 +454,74 @@
     function searchNotes() {
       const query = document.getElementById('search-note').value.toLowerCase();
       if (query.trim() === '') {
+        renderNotes();
         return;
       }
-      const matchedIndex = notes.findIndex(note =>
-        note.content.toLowerCase().includes(query)
+      const filteredNotes = notes.filter(note =>
+        note.content.toLowerCase().includes(query) || note.type.toLowerCase().includes(query)
       );
-      if (matchedIndex !== -1) {
-        const targetNote = document.getElementById(`note-${matchedIndex}`);
-        if (targetNote) {
-          targetNote.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          targetNote.style.backgroundColor = '#d4edda'; // 高亮显示
-          setTimeout(() => {
-            targetNote.style.backgroundColor = ''; // 恢复原样
-          }, 2000);
-        }
-      } else {
-        alert('未找到匹配的笔记！');
-      }
+      renderFilteredNotes(filteredNotes, query);
     }
 
-    // 图片上传与九宫格展示
-    function uploadImages() {
-      const files = document.getElementById('image-upload').files;
-      Array.from(files).forEach(file => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          const img = new Image();
-          img.src = e.target.result;
+    // 渲染过滤后的笔记列表，并高亮匹配的文本
+    function renderFilteredNotes(filteredNotes, query) {
+      const noteList = document.getElementById('note-list');
+      noteList.innerHTML = '';
+      filteredNotes.forEach((note, index) => {
+        const li = document.createElement('li');
+        li.className = 'note-item';
+        li.id = `note-${index}`;
 
-          // 裁剪为正方形
-          img.onload = function() {
-            const canvas = document.createElement('canvas');
-            const size = Math.min(img.width, img.height);
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, size, size);
+        // Highlight matching text
+        const highlightedType = highlightText(note.type, query);
+        const highlightedContent = highlightText(note.content, query);
 
-            const croppedImage = canvas.toDataURL();
-            images.push(croppedImage);
-            renderGallery();
-            saveData(); // 保存到 localStorage
-          };
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    // 渲染九宫格图片
-    function renderGallery() {
-      const gallery = document.getElementById('gallery');
-      gallery.innerHTML = '';
-      images.forEach((image, index) => {
-        const div = document.createElement('div');
-        div.className = 'gallery-item';
-        div.innerHTML = `
-          <img src="${image}" alt="上传的图片">
-          <button onclick="deleteImage(${index})">删除</button>
+        li.innerHTML = `
+          <div class="note-checkbox-container">
+            <input type="checkbox" class="note-checkbox" id="note-check-${index}">
+          </div>
+          <div class="note-content">
+            <strong>${highlightedType}</strong>: ${highlightedContent} 
+            <small>(${note.timestamp})</small>
+          </div>
+          <div class="note-actions">
+            <button onclick="editNote(${index})">编辑</button>
+            <button onclick="deleteNote(${index})">删除</button>
+          </div>
         `;
-        gallery.appendChild(div);
+        noteList.appendChild(li);
       });
     }
 
-    // 删除图片
-    function deleteImage(index) {
-      if (confirm('确定要删除这张图片吗？')) {
-        images.splice(index, 1);
-        renderGallery();
-        saveData(); // 保存到 localStorage
+    // 高亮匹配的文本
+    function highlightText(text, query) {
+      if (!query) return text;
+      const regex = new RegExp(`(${query})`, 'gi');
+      return text.replace(regex, '<span class="highlight">$1</span>');
+    }
+
+    // 批量删除选中笔记
+    function deleteSelectedNotes() {
+      const checkboxes = document.querySelectorAll('.note-checkbox:checked');
+      if (checkboxes.length === 0) {
+        alert('请先选择要删除的笔记。');
+        return;
       }
+      if (!confirm('确定要删除选中的笔记吗？')) {
+        return;
+      }
+      const indicesToDelete = [];
+      checkboxes.forEach(checkbox => {
+        const index = parseInt(checkbox.id.split('-')[2]);
+        indicesToDelete.push(index);
+      });
+      // Sort indices in descending order to avoid reindexing issues
+      indicesToDelete.sort((a, b) => b - a);
+      indicesToDelete.forEach(index => {
+        notes.splice(index, 1);
+      });
+      renderNotes();
+      saveData(); // 保存到 localStorage
     }
 
     // 随机语录（35条创意句子）
@@ -491,12 +568,90 @@
       document.getElementById('quote').textContent = quotes[randomIndex];
     }
 
+    // 重置自定义样式
+    function resetCustomStyles() {
+      if (confirm('确定要重置所有自定义样式吗？')) {
+        document.body.style.backgroundColor = '#f4f4f4';
+        document.getElementById('main-title').style.color = '#555';
+        document.querySelector('.container').style.backgroundColor = 'white';
+        document.querySelector('.container').style.color = '#333';
+        document.body.style.fontFamily = 'Arial, sans-serif';
+        document.querySelector('.card-background')?.remove();
+
+        // 恢复输入框和下拉菜单的默认值
+        document.getElementById('page-bg-color').value = '#ffffff';
+        document.getElementById('title-text-color').value = '#555';
+        document.getElementById('card-bg-color').value = '#ffffff';
+        document.getElementById('card-text-color').value = '#000000';
+        document.getElementById('font-select').value = 'Arial';
+        document.getElementById('background-image-opacity').value = '100';
+
+        saveSettings(); // 保存设置
+      }
+    }
+
     // 初始化事件监听
     window.onload = function() {
       loadData(); // 加载数据
       getRandomQuote();
       document.getElementById('image-upload').addEventListener('change', uploadImages);
     };
+
+    // 上传图片
+    function uploadImages(event) {
+      const files = event.target.files;
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const imageUrl = e.target.result;
+          const galleryItem = document.createElement('div');
+          galleryItem.className = 'gallery-item';
+          galleryItem.innerHTML = `
+            <img src="${imageUrl}" alt="Uploaded Image" style="width: 100%; height: 100%; object-fit: cover;">
+            <input type="checkbox" class="gallery-item-checkbox">
+            <button onclick="removeImage(this)">删除</button>
+          `;
+          document.getElementById('gallery').appendChild(galleryItem);
+          images.push(imageUrl);
+          saveData(); // 保存到 localStorage
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // 删除图片
+    function removeImage(button) {
+      const galleryItem = button.parentElement;
+      const imageUrl = galleryItem.querySelector('img').src;
+      const imageIndex = images.indexOf(imageUrl);
+      if (imageIndex !== -1) {
+        images.splice(imageIndex, 1);
+        galleryItem.remove();
+        saveData(); // 保存到 localStorage
+      }
+    }
+
+    // 删除选中图片
+    function deleteSelectedImages() {
+      const checkboxes = document.querySelectorAll('.gallery-item-checkbox:checked');
+      if (checkboxes.length === 0) {
+        alert('请先选择要删除的图片。');
+        return;
+      }
+      if (!confirm('确定要删除选中的图片吗？')) {
+        return;
+      }
+      checkboxes.forEach(checkbox => {
+        const galleryItem = checkbox.parentElement;
+        const imageUrl = galleryItem.querySelector('img').src;
+        const imageIndex = images.indexOf(imageUrl);
+        if (imageIndex !== -1) {
+          images.splice(imageIndex, 1);
+          galleryItem.remove();
+        }
+      });
+      saveData(); // 保存到 localStorage
+    }
   </script>
 </body>
 </html>
